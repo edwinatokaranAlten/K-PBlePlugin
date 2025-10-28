@@ -1,0 +1,9 @@
+headers = bluetoothapis.h
+headerFilter = bluetoothapis.h
+
+compilerOpts = -DWIN32_LEAN_AND_MEAN
+linkerOpts = -lBthprops -lSetupapi
+
+---
+
+// Additional Bluetooth LE definitions if needed

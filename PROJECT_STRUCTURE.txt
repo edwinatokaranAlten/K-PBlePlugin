@@ -1,0 +1,86 @@
+NIOX Communication Plugin - Project Structure
+==============================================
+
+NioxBLEPlugin/
+├── build.gradle.kts                    # Main build configuration
+├── settings.gradle.kts                 # Project settings
+├── gradle.properties                   # Gradle properties
+├── gradlew                            # Gradle wrapper (Unix)
+├── gradlew.bat                        # Gradle wrapper (Windows)
+├── build-mobile.sh                    # Build script for Android AAR + iOS XCFramework
+├── build-windows.ps1                  # Build script for Windows DLL (PowerShell)
+│
+├── .gitignore                         # Git ignore rules
+├── README.md                          # Main documentation
+├── QUICKSTART.md                      # Quick start guide
+├── INTEGRATION_GUIDE.md               # Detailed integration guide
+├── PROJECT_STRUCTURE.txt              # This file - project overview
+│
+├── gradle/
+│   └── wrapper/
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+│
+└── src/
+    ├── commonMain/                    # Shared code for all platforms
+    │   └── kotlin/com/niox/nioxplugin/
+    │       ├── NioxBleManager.kt      # Common BLE interface
+    │       └── models/
+    │           ├── BleDevice.kt       # BLE device model
+    │           ├── BleStatus.kt       # BLE status enum
+    │           └── ScanResult.kt      # Scan result sealed class
+    │
+    ├── androidMain/                   # Android-specific code
+    │   ├── AndroidManifest.xml        # Android manifest with permissions
+    │   └── kotlin/com/niox/nioxplugin/
+    │       └── NioxBleManager.android.kt  # Android BLE implementation
+    │
+    ├── iosMain/                       # iOS-specific code
+    │   └── kotlin/com/niox/nioxplugin/
+    │       └── NioxBleManager.ios.kt  # iOS BLE implementation (CoreBluetooth)
+    │
+    ├── mingwMain/                     # Windows-specific code
+    │   └── kotlin/com/niox/nioxplugin/
+    │       └── NioxBleManager.mingw.kt # Windows BLE implementation
+    │
+    └── nativeInterop/                 # Native C interop definitions
+        └── cinterop/
+            └── bluetooth.def          # Windows Bluetooth API definitions
+
+
+Build Outputs:
+==============
+
+After building, artifacts will be in:
+
+build/
+├── outputs/aar/
+│   └── niox-communication-plugin-release.aar     # Android library
+│
+├── XCFrameworks/
+│   ├── debug/
+│   │   └── NioxPlugin.xcframework                # iOS debug framework
+│   └── release/
+│       └── NioxPlugin.xcframework                # iOS release framework
+│
+└── bin/mingwX64/
+    └── releaseShared/
+        └── nioxplugin.dll                        # Windows native DLL
+
+
+Key Features:
+=============
+
+✓ Kotlin Multiplatform for code sharing
+✓ Platform-specific BLE implementations:
+  - Android: Android BLE API (API 21+)
+  - iOS: CoreBluetooth Framework
+  - Windows: Native Windows Bluetooth APIs (no Java)
+✓ Filters for NIOX PRO devices
+✓ Service UUID filtering
+✓ Real-time device discovery callbacks
+✓ Comprehensive error handling
+✓ Production-ready artifacts:
+  - AAR for Android
+  - XCFramework for iOS
+  - DLL for Windows

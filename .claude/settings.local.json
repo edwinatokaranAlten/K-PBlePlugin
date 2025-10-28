@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(awk '{print $9, \"\"\"\"(\"\"\"\" $5 \"\"\"\")\"\"\"\"}')",
+      "Bash(./gradlew:*)",
+      "Bash(gradle wrapper:*)",
+      "Bash(curl:*)",
+      "Bash(unzip:*)",
+      "Bash(/tmp/gradle-8.5/bin/gradle wrapper:*)",
+      "Bash(./build-mobile.sh:*)",
+      "Read(//Users/edwinthomas/Library/Android/sdk/**)",
+      "Bash(if [ -d \"$HOME/Library/Android/sdk\" ])",
+      "Bash(then echo \"$HOME/Library/Android/sdk\")",
+      "Bash(elif [ -d \"$HOME/Android/Sdk\" ])",
+      "Bash(then echo \"$HOME/Android/Sdk\")",
+      "Bash(else echo \"NOT_FOUND\")",
+      "Bash(fi)",
+      "Bash(pkill:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
