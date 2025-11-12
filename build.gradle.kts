@@ -18,13 +18,9 @@ kotlin {
         }
     }
 
-    // iOS targets
-    listOf(
-        iosX64(),
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach {
-        it.binaries.framework {
+    // iOS target (device only)
+    iosArm64 {
+        binaries.framework {
             baseName = "NioxPlugin"
             isStatic = true
         }
@@ -63,15 +59,7 @@ kotlin {
             dependsOn(commonMain)
         }
 
-        val iosX64Main by getting {
-            dependsOn(iosMain)
-        }
-
         val iosArm64Main by getting {
-            dependsOn(iosMain)
-        }
-
-        val iosSimulatorArm64Main by getting {
             dependsOn(iosMain)
         }
 
@@ -95,16 +83,12 @@ android {
     }
 }
 
-// Task to create XCFramework
+// Task to create XCFramework (device only)
 tasks.register("createXCFramework") {
     group = "build"
-    description = "Creates XCFramework for iOS"
+    description = "Creates XCFramework for iOS (device only)"
 
-    dependsOn(
-        "linkDebugFrameworkIosArm64",
-        "linkDebugFrameworkIosX64",
-        "linkDebugFrameworkIosSimulatorArm64"
-    )
+    dependsOn("linkDebugFrameworkIosArm64")
 
     doLast {
         val xcframeworkPath = "${layout.buildDirectory.get()}/XCFrameworks/debug/NioxPlugin.xcframework"
@@ -114,8 +98,6 @@ tasks.register("createXCFramework") {
             commandLine(
                 "xcodebuild", "-create-xcframework",
                 "-framework", "${layout.buildDirectory.get()}/bin/iosArm64/debugFramework/NioxPlugin.framework",
-                "-framework", "${layout.buildDirectory.get()}/bin/iosX64/debugFramework/NioxPlugin.framework",
-                "-framework", "${layout.buildDirectory.get()}/bin/iosSimulatorArm64/debugFramework/NioxPlugin.framework",
                 "-output", xcframeworkPath
             )
         }
@@ -126,46 +108,20 @@ tasks.register("createXCFramework") {
 
 tasks.register("createReleaseXCFramework") {
     group = "build"
-    description = "Creates Release XCFramework for iOS"
+    description = "Creates Release XCFramework for iOS (device only)"
 
-    dependsOn(
-        "linkReleaseFrameworkIosArm64",
-        "linkReleaseFrameworkIosX64",
-        "linkReleaseFrameworkIosSimulatorArm64"
-    )
+    dependsOn("linkReleaseFrameworkIosArm64")
 
     doLast {
         val buildDir = layout.buildDirectory.get()
         val xcframeworkPath = "$buildDir/XCFrameworks/release/NioxPlugin.xcframework"
         delete(xcframeworkPath)
 
-        // Create a universal simulator framework by combining x64 and arm64 simulators
-        val simFrameworkPath = "$buildDir/bin/iosSimulator/releaseFramework/NioxPlugin.framework"
-        delete(simFrameworkPath)
-        mkdir(simFrameworkPath)
-
-        // Copy the base framework structure from one simulator
-        copy {
-            from("$buildDir/bin/iosSimulatorArm64/releaseFramework/NioxPlugin.framework")
-            into(simFrameworkPath)
-        }
-
-        // Create fat binary combining both simulator architectures
-        exec {
-            commandLine(
-                "lipo", "-create",
-                "$buildDir/bin/iosX64/releaseFramework/NioxPlugin.framework/NioxPlugin",
-                "$buildDir/bin/iosSimulatorArm64/releaseFramework/NioxPlugin.framework/NioxPlugin",
-                "-output", "$simFrameworkPath/NioxPlugin"
-            )
-        }
-
-        // Now create XCFramework with device and universal simulator
+        // Create XCFramework with device framework only
         exec {
             commandLine(
                 "xcodebuild", "-create-xcframework",
                 "-framework", "$buildDir/bin/iosArm64/releaseFramework/NioxPlugin.framework",
-                "-framework", simFrameworkPath,
                 "-output", xcframeworkPath
             )
         }

@@ -1,11 +1,13 @@
 package com.niox.nioxplugin
 
+import com.niox.nioxplugin.delegates.IosCentralManagerDelegate
 import com.niox.nioxplugin.models.BleDevice
 import com.niox.nioxplugin.models.BleStatus
+import com.niox.nioxplugin.models.ConnectionState
+import com.niox.nioxplugin.operations.IosScanOperations
+import com.niox.nioxplugin.platform.createPlatformBleAdapter
 import kotlinx.cinterop.*
 import platform.CoreBluetooth.*
-import platform.Foundation.*
-import platform.darwin.NSObject
 import platform.darwin.dispatch_get_main_queue
 
 actual fun createNioxBleManager(context: Any?): NioxBleManager {
@@ -15,13 +17,19 @@ actual fun createNioxBleManager(context: Any?): NioxBleManager {
 @OptIn(ExperimentalForeignApi::class)
 class IosNioxBleManager : NioxBleManager {
 
-    private val centralManager: CBCentralManager
-    private val delegate: BleDelegate
+    private val platformAdapter = createPlatformBleAdapter()
+    private val connectionManager = NioxConnectionManager(platformAdapter)
+
     private val discoveredDevices = mutableListOf<BleDevice>()
     private var isScanning = false
 
+    // Keep CBCentralManager and delegate for scanning
+    internal val centralManager: CBCentralManager
+    internal val delegate: IosCentralManagerDelegate
+
     init {
-        delegate = BleDelegate(
+        delegate = IosCentralManagerDelegate(
+            manager = this,
             onDeviceDiscovered = { device ->
                 val existingIndex = discoveredDevices.indexOfFirst { it.address == device.address }
                 if (existingIndex >= 0) {
@@ -34,15 +42,11 @@ class IosNioxBleManager : NioxBleManager {
         centralManager = CBCentralManager(delegate, dispatch_get_main_queue())
     }
 
+    // Scan operations remain platform-specific
+    private val scanOperations = IosScanOperations(this, discoveredDevices)
+
     override fun checkBleStatus(): BleStatus {
-        return when (centralManager.state) {
-            CBManagerStatePoweredOn -> BleStatus.ENABLED
-            CBManagerStatePoweredOff -> BleStatus.DISABLED
-            CBManagerStateUnsupported -> BleStatus.NOT_SUPPORTED
-            CBManagerStateUnauthorized -> BleStatus.PERMISSION_DENIED
-            CBManagerStateUnknown -> BleStatus.UNKNOWN
-            else -> BleStatus.UNKNOWN
-        }
+        return platformAdapter.checkBleStatus()
     }
 
     override fun startScan(
@@ -51,92 +55,98 @@ class IosNioxBleManager : NioxBleManager {
         onScanComplete: (List<BleDevice>) -> Unit,
         onError: (String, Int) -> Unit
     ) {
-        val status = checkBleStatus()
-        if (status != BleStatus.ENABLED) {
-            onError("BLE is not available. Status: $status", -1)
-            return
-        }
-
         if (isScanning) {
             onError("Scan already in progress", -2)
             return
         }
-
-        discoveredDevices.clear()
-        delegate.onDeviceFound = onDeviceFound
-
-        // Parse service UUID
-        val serviceUUID = CBUUID.UUIDWithString(NioxConstants.SERVICE_UUID)
-
-        // Start scanning with service UUIDs
-        centralManager.scanForPeripheralsWithServices(
-            serviceUUIDs = listOf(serviceUUID),
-            options = null
-        )
-
         isScanning = true
-
-        // Schedule stop after duration
-        NSTimer.scheduledTimerWithTimeInterval(
-            interval = durationMillis / 1000.0,
-            repeats = false
-        ) { _ ->
-            stopScan()
-            onScanComplete(discoveredDevices.toList())
+        scanOperations.startScan(durationMillis, onDeviceFound, onScanComplete, onError) {
+            isScanning = false
         }
     }
 
     override fun stopScan() {
         if (!isScanning) return
-
-        centralManager.stopScan()
+        scanOperations.stopScan()
         isScanning = false
-        delegate.onDeviceFound = null
     }
 
     override fun getDiscoveredDevices(): List<BleDevice> {
         return discoveredDevices.toList()
     }
 
-    @OptIn(ExperimentalForeignApi::class)
-    private class BleDelegate(
-        private val onDeviceDiscovered: (BleDevice) -> Unit
-    ) : NSObject(), CBCentralManagerDelegateProtocol {
+    override fun connect(
+        device: BleDevice,
+        onConnectionStateChanged: (ConnectionState) -> Unit,
+        onServicesDiscovered: (List<String>) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        connectionManager.connect(
+            device,
+            onConnectionStateChanged,
+            onError
+        )
+    }
 
-        var onDeviceFound: ((BleDevice) -> Unit)? = null
+    override fun disconnect() {
+        connectionManager.disconnect()
+    }
 
-        override fun centralManagerDidUpdateState(central: CBCentralManager) {
-            // State updates are handled by checkBleStatus()
-        }
+    override fun getConnectionState(): ConnectionState {
+        return connectionManager.getConnectionState()
+    }
 
-        override fun centralManager(
-            central: CBCentralManager,
-            didDiscoverPeripheral: CBPeripheral,
-            advertisementData: Map<Any?, *>,
-            RSSI: NSNumber
-        ) {
-            val peripheralName = didDiscoverPeripheral.name
+    override fun getConnectedDevice(): BleDevice? {
+        return connectionManager.getConnectedDevice()
+    }
 
-            // Filter by name prefix
-            if (peripheralName != null && peripheralName.startsWith(NioxConstants.DEVICE_NAME_PREFIX)) {
+    override fun readCharacteristic(
+        serviceUuid: String,
+        characteristicUuid: String,
+        onSuccess: (ByteArray) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        platformAdapter.readCharacteristic(
+            serviceUuid,
+            characteristicUuid,
+            onSuccess,
+            onError
+        )
+    }
 
-                // Extract service UUIDs from advertisement data
-                @Suppress("UNCHECKED_CAST")
-                val serviceUuids = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? List<CBUUID>)
-                    ?.map { it.UUIDString }
-                    ?: emptyList()
+    override fun writeCharacteristic(
+        serviceUuid: String,
+        characteristicUuid: String,
+        data: ByteArray,
+        onSuccess: () -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        platformAdapter.writeCharacteristic(
+            serviceUuid,
+            characteristicUuid,
+            data,
+            onSuccess,
+            onError
+        )
+    }
 
-                val bleDevice = BleDevice(
-                    name = peripheralName,
-                    address = didDiscoverPeripheral.identifier.UUIDString,
-                    rssi = RSSI.intValue,
-                    serviceUuids = serviceUuids
-                )
+    override fun enableNotifications(
+        serviceUuid: String,
+        characteristicUuid: String,
+        onNotification: (ByteArray) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        platformAdapter.setNotificationCallback(characteristicUuid, onNotification)
+        platformAdapter.enableNotification(
+            serviceUuid,
+            characteristicUuid,
+            onSuccess = {},
+            onError
+        )
+    }
 
-                onDeviceDiscovered(bleDevice)
-                onDeviceFound?.invoke(bleDevice)
-            }
-        }
-
+    override fun disableNotifications(serviceUuid: String, characteristicUuid: String) {
+        platformAdapter.removeNotificationCallback(characteristicUuid)
+        // Platform adapter doesn't expose disable notification yet, but callback is removed
     }
 }

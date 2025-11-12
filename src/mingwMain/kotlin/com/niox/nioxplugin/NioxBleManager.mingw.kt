@@ -2,6 +2,7 @@ package com.niox.nioxplugin
 
 import com.niox.nioxplugin.models.BleDevice
 import com.niox.nioxplugin.models.BleStatus
+import com.niox.nioxplugin.models.ConnectionState
 import kotlinx.cinterop.*
 import platform.windows.*
 import kotlin.native.concurrent.AtomicReference
@@ -17,6 +18,11 @@ class WindowsNioxBleManager : NioxBleManager {
     private val discoveredDevices = mutableListOf<BleDevice>()
     private var isScanning = false
     private var scanHandle: HANDLE? = null
+
+    // Connection-related fields
+    private var connectedDevice: BleDevice? = null
+    private var connectionState: ConnectionState = ConnectionState.DISCONNECTED
+    private var deviceHandle: HANDLE? = null
 
     override fun checkBleStatus(): BleStatus {
         // Check if Bluetooth radio is available and enabled on Windows
@@ -162,5 +168,74 @@ class WindowsNioxBleManager : NioxBleManager {
 
     override fun getDiscoveredDevices(): List<BleDevice> {
         return discoveredDevices.toList()
+    }
+
+    override fun connect(
+        device: BleDevice,
+        onConnectionStateChanged: (ConnectionState) -> Unit,
+        onServicesDiscovered: (List<String>) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        // NOTE: Windows BLE GATT connection requires modern Windows.Devices.Bluetooth APIs
+        // which are not available through the classic Bluetooth APIs we're currently using.
+        //
+        // To implement full BLE connection support on Windows, this would require either:
+        // 1. Using WinRT/UWP APIs (Windows.Devices.Bluetooth.GenericAttributeProfile)
+        // 2. Using a different interop approach with COM/WinRT from Kotlin/Native
+        // 3. Migrating to a JVM-based Windows implementation that can use Java libraries
+        //
+        // Current status: Stub implementation that returns "not implemented" error
+
+        onError("BLE connection not implemented for Windows platform. Use Android or iOS for full connection support.", -100)
+        connectionState = ConnectionState.FAILED
+    }
+
+    override fun disconnect() {
+        deviceHandle?.let { handle ->
+            CloseHandle(handle)
+        }
+        deviceHandle = null
+        connectedDevice = null
+        connectionState = ConnectionState.DISCONNECTED
+    }
+
+    override fun getConnectionState(): ConnectionState {
+        return connectionState
+    }
+
+    override fun getConnectedDevice(): BleDevice? {
+        return connectedDevice
+    }
+
+    override fun readCharacteristic(
+        serviceUuid: String,
+        characteristicUuid: String,
+        onSuccess: (ByteArray) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        onError("BLE characteristic read not implemented for Windows platform", -110)
+    }
+
+    override fun writeCharacteristic(
+        serviceUuid: String,
+        characteristicUuid: String,
+        data: ByteArray,
+        onSuccess: () -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        onError("BLE characteristic write not implemented for Windows platform", -120)
+    }
+
+    override fun enableNotifications(
+        serviceUuid: String,
+        characteristicUuid: String,
+        onNotification: (ByteArray) -> Unit,
+        onError: (String, Int) -> Unit
+    ) {
+        onError("BLE notifications not implemented for Windows platform", -130)
+    }
+
+    override fun disableNotifications(serviceUuid: String, characteristicUuid: String) {
+        // No-op for Windows
     }
 }

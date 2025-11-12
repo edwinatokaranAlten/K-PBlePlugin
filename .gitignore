@@ -64,3 +64,4 @@ DerivedData/
 # Output
 out/
 bin/
+.claude/
